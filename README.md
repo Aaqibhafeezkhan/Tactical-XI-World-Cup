@@ -1,4 +1,4 @@
-# Tactical XI — FIFA World Cup 2026
+# Tactical XI - FIFA World Cup
 
 **Build the XI. Change the tactics. Rewrite the match.**
 
