@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "prepare:data": "node scripts/sync-world-cup-data.mjs",
+    "prepare:data": "node scripts/sync-world-cup-data.mjs && node scripts/prepare-historical-world-cup.mjs",
+    "prepare:historical": "node scripts/prepare-historical-world-cup.mjs",
     "dev": "npm run prepare:data && vite",
     "build": "npm run prepare:data && tsc -b && vite build",
     "preview": "vite preview",
