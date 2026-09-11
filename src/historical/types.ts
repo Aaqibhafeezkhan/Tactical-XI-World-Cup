@@ -1,7 +1,7 @@
 export type TournamentStatus = 'completed' | 'not-held';
 export type DataOrigin = 'official' | 'reconstructed' | 'derived';
 export type Confidence = 'high' | 'medium' | 'low';
-export type CompetitionStage = 'group' | 'first-round' | 'round-of-16' | 'quarter-final' | 'semi-final' | 'third-place' | 'final' | 'final-group';
+export type CompetitionStage = 'group' | 'first-round' | 'round-of-32' | 'round-of-16' | 'quarter-final' | 'semi-final' | 'third-place' | 'final' | 'final-group';
 export type HistoricalPosition = 'GK' | 'DEF' | 'MID' | 'FWD' | 'UNKNOWN';
 
 export interface Provenance {
@@ -30,6 +30,7 @@ export interface HistoricalTournament {
   format: string;
   participatingTeams: number;
   championTeamId?: string;
+  finalStandings?: string[];
   provenance: Provenance[];
 }
 
