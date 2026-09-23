@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { HISTORICAL_TOURNAMENTS } from './catalog';
 import type { HistoricalArchiveDocument } from './archive';
+import HistoricalXIBuilder from './HistoricalXIBuilder';
 
 const years = HISTORICAL_TOURNAMENTS.map(t => t.year);
 
@@ -9,6 +10,7 @@ export default function HistoricalExplorer() {
   const [query, setQuery] = useState('');
   const [archive, setArchive] = useState<HistoricalArchiveDocument | null>(null);
   const [error, setError] = useState('');
+  const [builderTeam, setBuilderTeam] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/data/historicalWorldCup.json')
@@ -26,6 +28,7 @@ export default function HistoricalExplorer() {
       .sort((a, b) => (a.finishPosition ?? 999) - (b.finishPosition ?? 999) || a.teamName.localeCompare(b.teamName));
   }, [archive, tournament, query]);
   const matches = archive?.matches.filter(m => m.tournamentId === tournament.id).length ?? 0;
+  if (builderTeam && year === 2026) return <HistoricalXIBuilder teamName={builderTeam} onBack={() => setBuilderTeam(null)} />;
 
   return <div style={{minHeight:'100vh',background:'#07120f',color:'#eef8f3',fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
     <header style={{height:72,borderBottom:'1px solid rgba(255,255,255,.08)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 28px',background:'#081410'}}>
@@ -44,7 +47,7 @@ export default function HistoricalExplorer() {
         </div>
         {tournament.status==='not-held' ? <div style={{padding:'34px 10px',textAlign:'center',color:'#d6b978',background:'rgba(245,184,88,.05)',border:'1px solid rgba(245,184,88,.12)',borderRadius:12}}>This edition was not held. No teams, players, or matches are imported.</div> : error ? <div style={{padding:18,color:'#e6c783',background:'rgba(245,184,88,.05)',borderRadius:12}}>{error}</div> : !archive ? <div style={{padding:18,color:'#8ea69b'}}>Loading historical archive…</div> : <>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:16}}>{[['Teams',String(teams.length)],['Matches',String(matches)],['Champion',tournament.finalStandings?.[0] ?? 'Unknown']].map(([label,value])=><div key={label} style={{padding:13,border:'1px solid rgba(255,255,255,.06)',borderRadius:10}}><div style={{fontSize:9,color:'#678076'}}>{label}</div><div style={{fontSize:16,fontWeight:850,marginTop:4}}>{value}</div></div>)}</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:9}}>{teams.map(team=><article key={team.id} style={{padding:13,border:'1px solid rgba(255,255,255,.06)',borderRadius:11,background:'#081410'}}><strong>{team.teamName}</strong><div style={{fontSize:10,color:'#71877d',marginTop:7}}>{team.matchesPlayed ?? 0} matches · {team.wins ?? 0}W {team.draws ?? 0}D {team.losses ?? 0}L</div><div style={{fontSize:10,color:'#8fa79b',marginTop:4}}>{team.goalsFor ?? 0} GF · {team.goalsAgainst ?? 0} GA</div>{team.stageReached && <div style={{fontSize:9,color:'#9cefc0',marginTop:8}}>Stage: {team.stageReached}</div>}</article>)}</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:9}}>{teams.map(team=><article key={team.id} style={{padding:13,border:'1px solid rgba(255,255,255,.06)',borderRadius:11,background:'#081410'}}><strong>{team.teamName}</strong><div style={{fontSize:10,color:'#71877d',marginTop:7}}>{team.matchesPlayed ?? 0} matches · {team.wins ?? 0}W {team.draws ?? 0}D {team.losses ?? 0}L</div><div style={{fontSize:10,color:'#8fa79b',marginTop:4}}>{team.goalsFor ?? 0} GF · {team.goalsAgainst ?? 0} GA</div>{team.stageReached && <div style={{fontSize:9,color:'#9cefc0',marginTop:8}}>Stage: {team.stageReached}</div>}{year===2026 && <button onClick={()=>setBuilderTeam(team.teamName)} style={{marginTop:10,width:'100%',background:'#12301f',border:'1px solid #2d6b49',color:'#b9ffd2',borderRadius:7,padding:'8px',fontSize:10,cursor:'pointer'}}>Build Historical XI</button>}</article>)}</div>
           {teams.length===0 && <div style={{padding:24,textAlign:'center',color:'#71877d'}}>No participating team matches that search.</div>}
         </>}
       </section>
