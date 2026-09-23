@@ -1,14 +1,15 @@
-import type { LineupPlayer, MatchEvent, MatchStats, OpponentSetup, Player, PlayerRating, Tactics, TacticalSetup, Team, SimulationResult } from '../types';
+import type { LineupPlayer, MatchEvent, MatchStats, OpponentSetup, Player, PlayerRating, Tactics, TacticalSetup, Team, SimulationContext, SimulationResult } from '../types';
 
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
 const avg=(a:number[])=>a.length?a.reduce((s,v)=>s+v,0)/a.length:0;
 function seededRandom(seed:number){let t=seed>>>0;return()=>{t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296;};}
 function hash(s:string){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
 
-export function simulateMatch(team:Team,opponent:Team,setup:TacticalSetup,opp:OpponentSetup,players:Player[],nonce=0):SimulationResult{
+export function simulateMatch(team:Team,opponent:Team,setup:TacticalSetup,opp:OpponentSetup,players:Player[],nonce=0,context?:SimulationContext):SimulationResult{
+ const simulationContext=context??defaultContext();
  const ours=players.filter(p=>setup.players.some(x=>x.playerId===p.id));
  const oppTeamStrength=Math.max(68,Math.min(92,opponent.rating/20));
- const g=seededRandom(hash(`${team.id}|${opponent.id}|${setup.formation}|${JSON.stringify(setup.tactics)}|${nonce}`));
+ const g=seededRandom(hash(`${team.id}|${opponent.id}|${setup.formation}|${JSON.stringify(setup.tactics)}|${simulationContext.year}|${simulationContext.mode}|${nonce}`));
  const attack=avg(ours.filter(p=>p.position==='FWD').map(p=>p.rating))||74;
  const midfield=avg(ours.filter(p=>p.position==='MID').map(p=>p.rating))||74;
  const defence=avg(ours.filter(p=>p.position==='DEF').map(p=>p.rating))||74;
@@ -29,8 +30,11 @@ export function simulateMatch(team:Team,opponent:Team,setup:TacticalSetup,opp:Op
  const stats:MatchStats={possession,shots,shotsOnTarget:onTarget,xg,dangerousAttacks:[Math.round(shots[0]*1.65+setup.tactics.attackingRisk*.08),Math.round(shots[1]*1.55+opp.tactics.attackingRisk*.08)],highTurnovers,bigChances:[Math.max(score[0],Math.round(xg[0]*.75+g()*.8)),Math.max(score[1],Math.round(xg[1]*.7+g()*.8))],fouls:[Math.round(7+setup.tactics.pressing*.05+g()*4),Math.round(7+opp.tactics.pressing*.05+g()*4)],corners:[Math.round(3+shots[0]*.18+setup.tactics.width*.018),Math.round(3+shots[1]*.18+opp.tactics.width*.014)]};
  const events=makeEvents(score,stats,g,setup,opp);const ratings=makeRatings(ours,setup,score[0],g);ratings.sort((a,b)=>b.rating-a.rating);
  const verdict=makeReport(team.name,opponent.name,stats,setup.tactics,opp.tactics,setup.formation,midfield,attack,defence);
- return{score,stats,events,ratings,playerOfMatch:ratings[0]?.playerId??ours[0]?.id??'',verdict:verdict.slice(0,3),tacticalEdge:verdict.slice(3),seed:hash(`${team.id}|${opponent.id}|${nonce}`)};
+ const assumptions=[...simulationContext.assumptions,'Team and player ratings are app-model inputs, not official historical ratings.','Match events, score, xG, player ratings and tactical verdicts are model-generated; they are not historical match records.'];
+ return{score,stats,events,ratings,playerOfMatch:ratings[0]?.playerId??ours[0]?.id??'',verdict:verdict.slice(0,3),tacticalEdge:verdict.slice(3),assumptions,context:simulationContext,seed:hash(`${team.id}|${opponent.id}|${simulationContext.year}|${nonce}`)};
 }
+function defaultContext():SimulationContext{return{year:2026,mode:'current',competition:'FIFA World Cup 2026',dataBasis:'2026 final-squad dataset plus app tactical model',assumptions:['The simulation is hypothetical and does not reproduce a recorded World Cup match.','The rules-based engine uses the selected formation, tactics, app ratings and opponent preset.']};}
+
 function roleFit(lineup:LineupPlayer[],players:Player[],t:Tactics){const v=lineup.reduce((s,l)=>{const p=players.find(x=>x.id===l.playerId);if(!p)return s;let f=0;if(l.role.includes('Playmaker')||l.role.includes('Midfielder'))f+=t.possession*.01;if(l.role.includes('Winger'))f+=t.width*.006;if(l.role.includes('Forward'))f+=t.attackingRisk*.006;if(l.role.includes('Keeper'))f+=(100-t.defensiveLine)*.002;return s+f;},0);return clamp(v/Math.max(1,lineup.length),0,1);}
 function round2(n:number){return Math.round(n*100)/100;}
 function boundedPoisson(lambda:number,r:()=>number){let k=0,p=1,L=Math.exp(-Math.min(lambda,3.5));do{k++;p*=r();}while(p>L&&k<6);return Math.min(5,k-1);}
