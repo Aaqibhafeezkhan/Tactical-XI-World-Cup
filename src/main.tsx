@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import HistoricalExplorer from './historical/HistoricalExplorer';
 import './styles.css';
 
 const originalFetch = window.fetch.bind(window);
@@ -11,4 +12,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   return originalFetch(input, init);
 };
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+const render = () => root.render(<React.StrictMode>{window.location.hash === '#history' ? <HistoricalExplorer /> : <App />}</React.StrictMode>);
+render();
+window.addEventListener('hashchange', render);
