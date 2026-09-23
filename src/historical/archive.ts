@@ -25,6 +25,10 @@ export interface HistoricalArchiveDocument {
 
 export const HISTORICAL_ARCHIVE_PATH = '/data/historicalWorldCup.json';
 
+export function matchesForTournament(archive: HistoricalArchiveDocument, tournamentId: string): HistoricalMatch[] {
+  return archive.matches.filter(match => match.tournamentId === tournamentId);
+}
+
 export async function loadHistoricalArchive(): Promise<HistoricalArchiveDocument> {
   const response = await fetch(HISTORICAL_ARCHIVE_PATH);
   if (!response.ok) throw new Error(`Unable to load historical World Cup archive (${response.status}).`);
