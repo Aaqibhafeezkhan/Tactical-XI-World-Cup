@@ -4,6 +4,7 @@ import type { HistoricalArchiveDocument } from './archive';
 import HistoricalXIBuilder from './HistoricalXIBuilder';
 import HistoricalMatchExplorer from './HistoricalMatchExplorer';
 import HistoricalTacticalEvolution from './HistoricalTacticalEvolution';
+import HistoricalProvenance from './HistoricalProvenance';
 
 const years = HISTORICAL_TOURNAMENTS.map(t => t.year);
 
@@ -58,6 +59,7 @@ export default function HistoricalExplorer() {
           {teams.length===0 && <div style={{padding:24,textAlign:'center',color:'#71877d'}}>No participating team matches that search.</div>}
         </>}
       </section>
+      <HistoricalProvenance archive={archive} tournaments={HISTORICAL_TOURNAMENTS} />
       <p style={{fontSize:9,color:'#526a60',lineHeight:1.6,marginTop:14}}>Historical facts and archived match records are sourced data. Player-level historical records are not inferred from the current 2026 roster.</p>
     </main>
   </div>;
