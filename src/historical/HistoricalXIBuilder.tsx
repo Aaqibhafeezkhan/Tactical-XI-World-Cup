@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FORMATION_SPECS, ROLE_OPTIONS, type Formation, type LineupPlayer, type Player, type Role, type WorldCupData } from '../types';
+import { FORMATION_SPECS, ROLE_OPTIONS, type Formation, type LineupPlayer, type Player, type Role, type SimulationResult, type WorldCupData } from '../types';
+import { simulateMatch } from '../engine/simulation';
 import { autoArrange, slotsForFormation } from '../utils';
 
 const FORMATIONS: Formation[] = ['4-3-3','4-2-3-1','4-4-2','3-4-3','3-5-2','4-1-4-1','4-3-1-2','5-3-2'];
@@ -27,6 +28,8 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
   const [selectedId, setSelectedId] = useState<string|null>(null);
   const [error, setError] = useState('');
   const [drag, setDrag] = useState<{id:string;dx:number;dy:number}|null>(null);
+  const [opponentId, setOpponentId] = useState('');
+  const [simulation, setSimulation] = useState<SimulationResult|null>(null);
 
   useEffect(() => {
     fetch('/data/worldCup2026.json').then(r => r.ok ? r.json() : Promise.reject(new Error()))
@@ -37,6 +40,9 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
   const team = data?.teams.find(t => t.name === teamName);
   const squad = useMemo(() => data?.players.filter(p => p.teamId === team?.id) ?? [], [data, team?.id]);
   const playerMap = useMemo(() => new Map(squad.map(p => [p.id,p])), [squad]);
+  const opponents = useMemo(() => data?.teams.filter(t => t.id !== team?.id) ?? [], [data, team?.id]);
+  const opponent = data?.teams.find(t => t.id === opponentId);
+  useEffect(() => { if (!opponentId && opponents[0]) setOpponentId(opponents[0].id); }, [opponentId, opponents]);
 
   useEffect(() => {
     if (!squad.length) return;
@@ -51,10 +57,11 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
     setLineup(ls => ls.map(p => p.playerId===selectedId ? {...p,playerId} : p));
     setSelectedId(playerId);
   };
-  const reset = () => { const next=seed(squad,formation); setLineup(next); setSelectedId(next[0]?.playerId??null); };
-  const randomize = () => { const next=seed(squad,formation,true); setLineup(next); setSelectedId(next[0]?.playerId??null); };
-  const arrange = () => { setLineup(ls=>autoArrange(ls.map(p=>p.playerId),formation,squad)); };
-  const setRole = (role: Role) => setLineup(ls=>ls.map(p=>p.playerId===selectedId?{...p,role}:p));
+  const reset = () => { const next=seed(squad,formation); setLineup(next); setSelectedId(next[0]?.playerId??null); setSimulation(null); };
+  const randomize = () => { const next=seed(squad,formation,true); setLineup(next); setSelectedId(next[0]?.playerId??null); setSimulation(null); };
+  const arrange = () => { setLineup(ls=>autoArrange(ls.map(p=>p.playerId),formation,squad)); setSimulation(null); };
+  const setRole = (role: Role) => { setLineup(ls=>ls.map(p=>p.playerId===selectedId?{...p,role}:p)); setSimulation(null); };
+  const runSimulation = () => { if (!team || !opponent || lineup.length !== 11) return; setSimulation(simulateMatch(team,opponent,{formation,players:lineup,tactics:{possession:58,pressing:58,defensiveLine:56,width:55,tempo:54,attackingRisk:48}},{formation:'4-3-3',preset:'Balanced',tactics:{possession:50,pressing:50,defensiveLine:52,width:52,tempo:52,attackingRisk:48}},data!.players,1,{year:2026,mode:'historical',competition:'FIFA World Cup 2026',dataBasis:'2026 final-squad dataset and app-assigned tactical roles',assumptions:['This is a hypothetical 2026 tournament-context simulation, not a replay of a recorded fixture.','No historical match result is used to determine the simulated score.']})); };
   const down = (e:React.PointerEvent,id:string) => {
     const rect=(e.currentTarget as HTMLElement).getBoundingClientRect();
     setDrag({id,dx:e.clientX-rect.left-rect.width/2,dy:e.clientY-rect.top-rect.height/2});
@@ -94,6 +101,11 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
           <div style={{display:'grid',gap:7,margin:'10px 0 18px'}}>{[['Reset XI',reset],['Random XI',randomize],['Auto Arrange',arrange]].map(([label,fn])=><button key={label as string} onClick={fn as ()=>void} style={{background:'#0b1713',border:'1px solid #264136',color:'#b9ffd2',padding:'9px',borderRadius:8,cursor:'pointer'}}>{label as string}</button>)}</div>
           <div style={{fontSize:9,letterSpacing:'.16em',color:'#7f968a',fontWeight:800}}>SELECTED PLAYER</div>
           {selected ? <div style={{marginTop:9,padding:12,borderRadius:10,background:'#081410'}}><strong>{selected.name}</strong><div style={{fontSize:10,color:'#7f968a',marginTop:4}}>{selected.position} · Tactical Rating {selected.rating}</div><label style={{display:'block',fontSize:9,color:'#7f968a',marginTop:12}}>APP-ASSIGNED ROLE</label><select value={lineup.find(p=>p.playerId===selected.id)?.role} onChange={e=>setRole(e.target.value as Role)} style={{width:'100%',marginTop:5,background:'#07120f',border:'1px solid #264136',color:'#eef8f3',padding:8,borderRadius:7}}>{ROLE_OPTIONS[selected.position].map(r=><option key={r}>{r}</option>)}</select></div> : <p style={{fontSize:11,color:'#71877d'}}>Select a player on the pitch.</p>}
+          <div style={{fontSize:9,letterSpacing:'.16em',color:'#7f968a',fontWeight:800,marginTop:18}}>HISTORICAL SIMULATION</div>
+          <div style={{fontSize:10,color:'#71877d',marginTop:6,lineHeight:1.5}}>2026 is currently the only edition with tournament-specific squad records. Older editions stay unavailable rather than receiving modern player data.</div>
+          <select value={opponentId} onChange={e=>{setOpponentId(e.target.value);setSimulation(null)}} style={{width:'100%',marginTop:8,background:'#07120f',border:'1px solid #264136',color:'#eef8f3',padding:8,borderRadius:7}}>{opponents.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <button disabled={!opponent} onClick={runSimulation} style={{width:'100%',marginTop:7,background:'#12301f',border:'1px solid #2d6b49',color:'#b9ffd2',padding:'9px',borderRadius:8,cursor:'pointer'}}>Simulate hypothetical 2026 match</button>
+          {simulation && <div style={{marginTop:9,padding:10,borderRadius:9,background:'#081410'}}><strong>{team?.name} {simulation.score[0]} — {simulation.score[1]} {opponent?.name}</strong><div style={{fontSize:9,color:'#7f968a',marginTop:5}}>HYPOTHETICAL · NOT A HISTORICAL RESULT</div><div style={{fontSize:10,color:'#b9ffd2',marginTop:7}}>{simulation.verdict[0]}</div><details style={{marginTop:7,fontSize:9,color:'#8ea69b'}}><summary>Simulation assumptions</summary>{simulation.assumptions.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}</details></div>}
           <div style={{fontSize:9,letterSpacing:'.16em',color:'#7f968a',fontWeight:800,marginTop:18}}>REPLACE PLAYER</div>
           <div style={{maxHeight:290,overflow:'auto',marginTop:8}}>{squad.map(p=><button key={p.id} disabled={lineup.some(x=>x.playerId===p.id)} onClick={()=>replace(p.id)} style={{display:'flex',justifyContent:'space-between',width:'100%',padding:'8px 0',background:'transparent',border:0,borderBottom:'1px solid rgba(255,255,255,.05)',color:lineup.some(x=>x.playerId===p.id)?'#3f5148':'#dcebe3',textAlign:'left',cursor:lineup.some(x=>x.playerId===p.id)?'default':'pointer'}}><span>{p.name}</span><small>{p.rating}</small></button>)}</div>
         </aside>

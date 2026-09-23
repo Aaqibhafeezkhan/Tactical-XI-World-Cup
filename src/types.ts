@@ -27,9 +27,11 @@ export interface MatchStats {
 }
 export interface MatchEvent { minute: number; team: 0 | 1; type: 'goal' | 'yellow' | 'chance' | 'moment'; text: string; }
 export interface PlayerRating { playerId: string; rating: number; contribution: string; }
+export type SimulationMode = 'current' | 'historical';
+export interface SimulationContext { year: number; mode: SimulationMode; competition: string; dataBasis: string; assumptions: string[]; }
 export interface SimulationResult {
   score: [number, number]; stats: MatchStats; events: MatchEvent[]; ratings: PlayerRating[]; playerOfMatch: string;
-  verdict: string[]; tacticalEdge: string[]; seed: number;
+  verdict: string[]; tacticalEdge: string[]; assumptions: string[]; context: SimulationContext; seed: number;
 }
 export interface WorldCupData { teams: Team[]; players: Player[]; generatedAt: string; source: string; sourceRows: number; }
 
