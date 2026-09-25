@@ -27,6 +27,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Use npm 11
+        run: |
+          npm install --global npm@11
+          npm --version
+
       - name: Install dependencies
         run: npm install
 
