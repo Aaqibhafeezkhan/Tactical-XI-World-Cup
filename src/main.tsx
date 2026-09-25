@@ -13,6 +13,6 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
-const render = () => root.render(<React.StrictMode>{window.location.hash === '#history' ? <HistoricalExplorer /> : <App />}</React.StrictMode>);
+const render = () => root.render(<React.StrictMode>{window.location.hash.startsWith('#history') ? <HistoricalExplorer /> : <App />}</React.StrictMode>);
 render();
 window.addEventListener('hashchange', render);
