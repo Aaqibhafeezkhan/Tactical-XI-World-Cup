@@ -115,6 +115,6 @@ export function teamFormationProfiles(data: HistoricalWorldCupData): Array<{ tea
       counts.set(key, current ? { formation: current.formation, count: current.count + 1 } : { formation, count: 1 });
     });
     const total = formations.length;
-    return [{ teamParticipationId: participation.id, teamName: participation.teamName, year: tournament.year, formations: [...counts.values()].map(item => profileForFormation(item.formation, item.count, total)).sort((a, b) => b.appearances - a.appearances))];
+    return [{ teamParticipationId: participation.id, teamName: participation.teamName, year: tournament.year, formations: [...counts.values()].map(item => profileForFormation(item.formation, item.count, total)).sort((a, b) => b.appearances - a.appearances) }];
   });
 }
