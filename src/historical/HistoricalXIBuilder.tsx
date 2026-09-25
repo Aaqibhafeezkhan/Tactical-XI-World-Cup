@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { navigateHistorical } from './navigation';
 import { FORMATION_SPECS, ROLE_OPTIONS, type Formation, type LineupPlayer, type Player, type Role, type SimulationResult, type WorldCupData } from '../types';
 import { simulateMatch } from '../engine/simulation';
 import { autoArrange, slotsForFormation } from '../utils';
@@ -21,15 +22,20 @@ function seed(squad: Player[], formation: Formation, random = false) {
   return autoArrange(selected.map(p=>p.id), formation, squad);
 }
 
-export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: string; onBack: () => void }) {
+export default function HistoricalXIBuilder({ teamName, onBack, initialOpponentName, initialFormation }: { teamName: string; onBack: () => void; initialOpponentName?: string; initialFormation?: Formation }) {
   const [data, setData] = useState<WorldCupData|null>(null);
-  const [formation, setFormation] = useState<Formation>('4-3-3');
+  const [formation, setFormation] = useState<Formation>(initialFormation ?? '4-3-3');
   const [lineup, setLineup] = useState<LineupPlayer[]>([]);
   const [selectedId, setSelectedId] = useState<string|null>(null);
   const [error, setError] = useState('');
   const [drag, setDrag] = useState<{id:string;dx:number;dy:number}|null>(null);
   const [opponentId, setOpponentId] = useState('');
   const [simulation, setSimulation] = useState<SimulationResult|null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => mainRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     fetch('/data/worldCup2026.json').then(r => r.ok ? r.json() : Promise.reject(new Error()))
@@ -42,7 +48,11 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
   const playerMap = useMemo(() => new Map(squad.map(p => [p.id,p])), [squad]);
   const opponents = useMemo(() => data?.teams.filter(t => t.id !== team?.id) ?? [], [data, team?.id]);
   const opponent = data?.teams.find(t => t.id === opponentId);
-  useEffect(() => { if (!opponentId && opponents[0]) setOpponentId(opponents[0].id); }, [opponentId, opponents]);
+  useEffect(() => {
+    if (opponentId) return;
+    const preferred = initialOpponentName ? opponents.find(opponentItem => opponentItem.name === initialOpponentName) : undefined;
+    setOpponentId(preferred?.id ?? opponents[0]?.id ?? '');
+  }, [opponentId, opponents, initialOpponentName]);
 
   useEffect(() => {
     if (!squad.length) return;
@@ -61,7 +71,7 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
   const randomize = () => { const next=seed(squad,formation,true); setLineup(next); setSelectedId(next[0]?.playerId??null); setSimulation(null); };
   const arrange = () => { setLineup(ls=>autoArrange(ls.map(p=>p.playerId),formation,squad)); setSimulation(null); };
   const setRole = (role: Role) => { setLineup(ls=>ls.map(p=>p.playerId===selectedId?{...p,role}:p)); setSimulation(null); };
-  const runSimulation = () => { if (!team || !opponent || lineup.length !== 11) return; setSimulation(simulateMatch(team,opponent,{formation,players:lineup,tactics:{possession:58,pressing:58,defensiveLine:56,width:55,tempo:54,attackingRisk:48}},{formation:'4-3-3',preset:'Balanced',tactics:{possession:50,pressing:50,defensiveLine:52,width:52,tempo:52,attackingRisk:48}},data!.players,1,{year:2026,mode:'historical',competition:'FIFA World Cup 2026',dataBasis:'2026 final-squad dataset and app-assigned tactical roles',assumptions:['This is a hypothetical 2026 tournament-context simulation, not a replay of a recorded fixture.','No historical match result is used to determine the simulated score.']})); };
+  const runSimulation = () => { if (!team || !opponent || lineup.length !== 11) return; navigateHistorical({view:'builder',year:2026,team:team.name,opponent:opponent.name,formation}); setSimulation(simulateMatch(team,opponent,{formation,players:lineup,tactics:{possession:58,pressing:58,defensiveLine:56,width:55,tempo:54,attackingRisk:48}},{formation:'4-3-3',preset:'Balanced',tactics:{possession:50,pressing:50,defensiveLine:52,width:52,tempo:52,attackingRisk:48}},data!.players,1,{year:2026,mode:'historical',competition:'FIFA World Cup 2026',dataBasis:'2026 final-squad dataset and app-assigned tactical roles',assumptions:['This is a hypothetical 2026 tournament-context simulation, not a replay of a recorded fixture.','No historical match result is used to determine the simulated score.']})); };
   const down = (e:React.PointerEvent,id:string) => {
     const rect=(e.currentTarget as HTMLElement).getBoundingClientRect();
     setDrag({id,dx:e.clientX-rect.left-rect.width/2,dy:e.clientY-rect.top-rect.height/2});
@@ -77,19 +87,19 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
     setLineup(ls=>ls.map(p=>p.playerId===drag.id?{...p,x:Math.max(5,Math.min(95,x)),y:Math.max(7,Math.min(93,y))}:p));
   };
 
-  return <div style={{minHeight:'100vh',background:'#07120f',color:'#eef8f3',fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
-    <header style={{height:72,borderBottom:'1px solid rgba(255,255,255,.08)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 28px',background:'#081410'}}>
+  return <div className="historical-page" style={{minHeight:'100vh',background:'#07120f',color:'#eef8f3',fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
+    <header className="historical-header" style={{height:72,borderBottom:'1px solid rgba(255,255,255,.08)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 28px',background:'#081410'}}>
       <div><div style={{fontSize:15,fontWeight:900,letterSpacing:'.16em'}}>TACTICAL XI</div><div style={{fontSize:9,color:'#7f968a',letterSpacing:'.18em',marginTop:4}}>HISTORICAL XI BUILDER · 2026</div></div>
-      <button onClick={onBack} style={{border:'1px solid #264136',background:'#0b1713',color:'#9cefc0',borderRadius:8,padding:'8px 12px',cursor:'pointer'}}>← Back to tournament</button>
+      <button aria-label="Return to historical tournament context" onClick={onBack} style={{border:'1px solid #264136',background:'#0b1713',color:'#9cefc0',borderRadius:8,padding:'8px 12px',cursor:'pointer'}}>← Back to tournament</button>
     </header>
-    <main style={{maxWidth:1180,margin:'0 auto',padding:28}}>
+    <main ref={mainRef} className="historical-main" style={{maxWidth:1180,margin:'0 auto',padding:28}} tabIndex={-1} aria-labelledby="historical-builder-title">
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'end',gap:20,marginBottom:18,flexWrap:'wrap'}}>
-        <div><div style={{fontSize:9,letterSpacing:'.18em',color:'#7f968a',fontWeight:800}}>FIFA WORLD CUP 2026 · COMPLETED EDITION</div><h1 style={{fontSize:30,margin:'6px 0'}}>Build {teamName}'s XI</h1><p style={{fontSize:11,color:'#8ea69b',margin:0,lineHeight:1.6}}>Uses the tournament's 2026 final-squad dataset. Tactical roles are app-assigned model roles, not official historical lineup claims.</p></div>
-        <select value={formation} onChange={e=>setFormation(e.target.value as Formation)} style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9}}>{FORMATIONS.map(f=><option key={f}>{FORMATION_LABELS[f]}</option>)}</select>
+        <div><div style={{fontSize:9,letterSpacing:'.18em',color:'#7f968a',fontWeight:800}}>FIFA WORLD CUP 2026 · COMPLETED EDITION</div><h1 id="historical-builder-title" style={{fontSize:30,margin:'6px 0'}}>Build {teamName}'s XI</h1><p style={{fontSize:11,color:'#8ea69b',margin:0,lineHeight:1.6}}>Uses the tournament's 2026 final-squad dataset. Tactical roles are app-assigned model roles, not official historical lineup claims.</p></div>
+        <select value={formation} onChange={e=>{const nextFormation=e.target.value as Formation;setFormation(nextFormation);navigateHistorical({view:'builder',year:2026,team:teamName,opponent:opponent?.name,formation:nextFormation})}} style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9}}>{FORMATIONS.map(f=><option key={f}>{FORMATION_LABELS[f]}</option>)}</select>
       </div>
-      {error ? <div style={{padding:20,borderRadius:12,background:'#21180d',color:'#e6c783'}}>{error}</div> : !data || !team ? <div style={{padding:20,color:'#8ea69b'}}>Loading the 2026 tournament squad…</div> : <div style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:14}}>
+      {error ? <div role="alert" style={{padding:20,borderRadius:12,background:'#21180d',color:'#e6c783'}}>{error}</div> : !data || !team ? <div role="status" aria-live="polite" style={{padding:20,color:'#8ea69b'}}>Loading the 2026 tournament squad…</div> : <div className="historical-builder-layout" style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:14}}>
         <section style={{border:'1px solid rgba(255,255,255,.08)',borderRadius:16,padding:18,background:'#0a1713'}}>
-          <div id="historical-xi-pitch" onPointerMove={move} onPointerUp={()=>setDrag(null)} onPointerLeave={()=>drag&&setDrag(null)} style={{position:'relative',height:560,borderRadius:14,overflow:'hidden',background:'linear-gradient(90deg,#0d3b24 0 49.5%,#0e4328 49.5% 50.5%,#0d3b24 50.5% 100%)',border:'1px solid #2c6545'}}>
+          <div className="historical-builder-pitch" id="historical-xi-pitch" onPointerMove={move} onPointerUp={()=>setDrag(null)} onPointerLeave={()=>drag&&setDrag(null)} style={{position:'relative',height:560,borderRadius:14,overflow:'hidden',background:'linear-gradient(90deg,#0d3b24 0 49.5%,#0e4328 49.5% 50.5%,#0d3b24 50.5% 100%)',border:'1px solid #2c6545'}}>
             <div style={{position:'absolute',left:'50%',top:0,bottom:0,width:1,background:'rgba(255,255,255,.22)'}}/><div style={{position:'absolute',left:'50%',top:'50%',width:120,height:120,transform:'translate(-50%,-50%)',border:'1px solid rgba(255,255,255,.25)',borderRadius:'50%'}}/>
             <div style={{position:'absolute',left:'50%',top:'50%',width:5,height:5,transform:'translate(-50%,-50%)',background:'#fff',borderRadius:'50%'}}/>
             {lineup.map(lp=>{const p=playerMap.get(lp.playerId);if(!p)return null;return <button key={p.id} onPointerDown={e=>down(e,p.id)} onClick={()=>setSelectedId(p.id)} title="Drag to reposition" style={{position:'absolute',left:lp.x+'%',top:lp.y+'%',transform:'translate(-50%,-50%)',background:'transparent',border:0,color:'#fff',cursor:'grab',textAlign:'center'}}><span style={{display:'grid',placeItems:'center',width:42,height:42,borderRadius:'50%',background:selectedId===p.id?'#b9ffd2':'#10271b',color:selectedId===p.id?'#07120f':'#eef8f3',border:'2px solid #8beeb2',fontWeight:900,fontSize:11}}>{p.name.split(' ').slice(-1)[0].slice(0,3).toUpperCase()}</span><span style={{display:'block',fontSize:9,marginTop:3,textShadow:'0 1px 3px #000'}}>{p.name.split(' ').slice(-1)[0]}</span><span style={{display:'block',fontSize:8,color:'#b9ffd2'}}>{lp.role}</span></button>})}
@@ -104,8 +114,8 @@ export default function HistoricalXIBuilder({ teamName, onBack }: { teamName: st
           <div style={{fontSize:9,letterSpacing:'.16em',color:'#7f968a',fontWeight:800,marginTop:18}}>HISTORICAL SIMULATION</div>
           <div style={{fontSize:10,color:'#71877d',marginTop:6,lineHeight:1.5}}>2026 is currently the only edition with tournament-specific squad records. Older editions stay unavailable rather than receiving modern player data.</div>
           <select value={opponentId} onChange={e=>{setOpponentId(e.target.value);setSimulation(null)}} style={{width:'100%',marginTop:8,background:'#07120f',border:'1px solid #264136',color:'#eef8f3',padding:8,borderRadius:7}}>{opponents.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
-          <button disabled={!opponent} onClick={runSimulation} style={{width:'100%',marginTop:7,background:'#12301f',border:'1px solid #2d6b49',color:'#b9ffd2',padding:'9px',borderRadius:8,cursor:'pointer'}}>Simulate hypothetical 2026 match</button>
-          {simulation && <div style={{marginTop:9,padding:10,borderRadius:9,background:'#081410'}}><strong>{team?.name} {simulation.score[0]} — {simulation.score[1]} {opponent?.name}</strong><div style={{fontSize:9,color:'#7f968a',marginTop:5}}>HYPOTHETICAL · NOT A HISTORICAL RESULT</div><div style={{fontSize:10,color:'#b9ffd2',marginTop:7}}>{simulation.verdict[0]}</div><details style={{marginTop:7,fontSize:9,color:'#8ea69b'}}><summary>Simulation assumptions</summary>{simulation.assumptions.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}</details></div>}
+          <button aria-label="Simulate hypothetical 2026 match" disabled={!opponent} onClick={runSimulation} style={{width:'100%',marginTop:7,background:'#12301f',border:'1px solid #2d6b49',color:'#b9ffd2',padding:'9px',borderRadius:8,cursor:'pointer'}}>Simulate hypothetical 2026 match</button>
+          {simulation && <div role="status" aria-live="polite" style={{marginTop:9,padding:10,borderRadius:9,background:'#081410'}}><strong>{team?.name} {simulation.score[0]} — {simulation.score[1]} {opponent?.name}</strong><div style={{fontSize:9,color:'#7f968a',marginTop:5}}>HYPOTHETICAL · NOT A HISTORICAL RESULT</div><div style={{fontSize:10,color:'#b9ffd2',marginTop:7}}>{simulation.verdict[0]}</div><details style={{marginTop:7,fontSize:9,color:'#8ea69b'}}><summary>Simulation assumptions</summary>{simulation.assumptions.map((a,i)=><div key={i} style={{marginTop:4}}>• {a}</div>)}</details></div>}
           <div style={{fontSize:9,letterSpacing:'.16em',color:'#7f968a',fontWeight:800,marginTop:18}}>REPLACE PLAYER</div>
           <div style={{maxHeight:290,overflow:'auto',marginTop:8}}>{squad.map(p=><button key={p.id} disabled={lineup.some(x=>x.playerId===p.id)} onClick={()=>replace(p.id)} style={{display:'flex',justifyContent:'space-between',width:'100%',padding:'8px 0',background:'transparent',border:0,borderBottom:'1px solid rgba(255,255,255,.05)',color:lineup.some(x=>x.playerId===p.id)?'#3f5148':'#dcebe3',textAlign:'left',cursor:lineup.some(x=>x.playerId===p.id)?'default':'pointer'}}><span>{p.name}</span><small>{p.rating}</small></button>)}</div>
         </aside>
