@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { HISTORICAL_TOURNAMENTS } from './catalog';
 import type { HistoricalArchiveDocument } from './archive';
+import { loadHistoricalEdition } from './archive';
 import HistoricalXIBuilder from './HistoricalXIBuilder';
 import HistoricalMatchExplorer from './HistoricalMatchExplorer';
 import HistoricalTacticalEvolution from './HistoricalTacticalEvolution';
@@ -15,19 +16,31 @@ export default function HistoricalExplorer() {
   const [archive, setArchive] = useState<HistoricalArchiveDocument | null>(null);
   const [error, setError] = useState('');
   const mainRef = useRef<HTMLElement>(null);
+  const tournament = HISTORICAL_TOURNAMENTS.find(t => t.year === route.year) ?? HISTORICAL_TOURNAMENTS[0];
 
   useEffect(() => {
-    fetch('/data/historicalWorldCup.json')
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-      .then(setArchive)
-      .catch(() => setError('Historical archive is not available in this build. Run npm run prepare:historical and rebuild.'));
-  }, []);
+    setArchive(null);
+    setError('');
+    if (tournament.status === 'not-held') return undefined;
+
+    let active = true;
+    loadHistoricalEdition(route.year)
+      .then(next => {
+        if (active) setArchive(next);
+      })
+      .catch(() => {
+        if (active) setError('The selected historical tournament archive is not available in this build. Run npm run prepare:historical and rebuild.');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [route.year, tournament.status]);
 
   useEffect(() => {
     requestAnimationFrame(() => mainRef.current?.focus());
   }, [route.view, route.year, route.team, route.player]);
 
-  const tournament = HISTORICAL_TOURNAMENTS.find(t => t.year === route.year) ?? HISTORICAL_TOURNAMENTS[0];
   const allTeams = useMemo(() => {
     if (!archive || tournament.status === 'not-held') return [];
     return archive.teamParticipations
@@ -120,7 +133,7 @@ export default function HistoricalExplorer() {
           ) : error ? (
             <div role="alert" style={{padding:18,color:'#e6c783',background:'rgba(245,184,88,.05)',borderRadius:12}}>{error}</div>
           ) : !archive ? (
-            <div role="status" aria-live="polite" style={{padding:18,color:'#8ea69b'}}>Loading historical archive…</div>
+            <div role="status" aria-live="polite" style={{padding:18,color:'#8ea69b'}}>Loading historical archive for {route.year}…</div>
           ) : (
             <>
               <div className="historical-stats" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:16}}>
