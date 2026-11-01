@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isCancelledFixture, normalizeSourceFixtures } from './historical-source-normalization.mjs';
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, 'public', 'data', 'historicalWorldCup');
@@ -14,7 +15,7 @@ const SOURCE_POLICY = {
   matchArchive: 'OpenFootball World Cup JSON',
   sourceUrl: 'https://github.com/openfootball/worldcup.json',
   license: 'CC0-1.0',
-  notes: 'Historical team names are preserved. 1942 and 1946 are modeled as not-held editions and intentionally have no match import.',
+  notes: 'Historical team names are preserved. Canceled source fixtures are retained separately without invented scores. 1942 and 1946 are modeled as not-held editions and intentionally have no match import.',
 };
 
 const stageRank = {
@@ -43,12 +44,6 @@ function stageFor(round = '', group = '') {
 
 function slug(value) {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-function scoreValues(score) {
-  if (Array.isArray(score)) return { ft: score };
-  if (score && Array.isArray(score.ft)) return { ft: score.ft, aet: score.aet, pens: score.pens };
-  throw new Error('Match is missing a final score.');
 }
 
 async function fetchEdition(year) {
@@ -90,11 +85,32 @@ async function main() {
   const editions = await Promise.all(YEARS.map(fetchEdition));
   const tournaments = editions.map(({ year, url }) => ({ year, id: `wc-${year}`, status: 'completed', sourceUrl: url, retrievedAt }));
   const matches = [];
-  const teamParticipations = [];
 
   for (const { year, url, payload } of editions) {
-    const normalized = payload.matches.map((match, index) => {
-      const score = scoreValues(match.score);
+    const sourceFixtures = normalizeSourceFixtures(payload.matches, year);
+    const cancelledFixtures = sourceFixtures
+      .filter(({ match }) => isCancelledFixture(match))
+      .map(({ match, index }) => ({
+        id: `wc-${year}-cancelled-${String(index + 1).padStart(3, '0')}`,
+        tournamentId: `wc-${year}`,
+        stage: stageFor(match.round, match.group),
+        date: match.date,
+        venue: match.ground,
+        homeTeamName: match.team1,
+        awayTeamName: match.team2,
+        status: 'cancelled',
+        provenance: [{
+          sourceName: SOURCE_POLICY.matchArchive,
+          sourceUrl: url,
+          retrievedAt,
+          origin: 'official',
+          confidence: 'high',
+          notes: 'The source explicitly marks this fixture as canceled; it is not counted as a played match and has no fabricated score.',
+        }],
+      }));
+
+    const playedFixtures = sourceFixtures.filter(({ match, score }) => score && !isCancelledFixture(match));
+    const normalized = playedFixtures.map(({ match, index, score }) => {
       const stage = stageFor(match.round, match.group);
       const id = `wc-${year}-match-${String(index + 1).padStart(3, '0')}`;
       return {
@@ -111,37 +127,36 @@ async function main() {
         awayScoreAfterExtraTime: score.aet?.[1],
         homeScoreAfterPenalties: score.pens?.[0],
         awayScoreAfterPenalties: score.pens?.[1],
-        provenance: [{ sourceName: SOURCE_POLICY.matchArchive, sourceUrl: url, retrievedAt, origin: 'official', confidence: 'high', notes: 'Public-domain match archive; historical team naming is preserved from the source.' }],
+        provenance: [{
+          sourceName: SOURCE_POLICY.matchArchive,
+          sourceUrl: url,
+          retrievedAt,
+          origin: 'official',
+          confidence: 'high',
+          notes: 'Public-domain match archive; historical team naming is preserved from the source.',
+        }],
       };
     });
-    const teams = summarizeTeams(year, normalized.map((match, index) => ({
-      ...payload.matches[index],
-      score: {
-        ft: [match.homeScore, match.awayScore],
-        aet: match.homeScoreAfterExtraTime == null ? undefined : [match.homeScoreAfterExtraTime, match.awayScoreAfterExtraTime],
-        pens: match.homeScoreAfterPenalties == null ? undefined : [match.homeScoreAfterPenalties, match.awayScoreAfterPenalties],
-      },
-    })));
+
+    const teams = summarizeTeams(year, playedFixtures.map(({ match, score }) => ({ ...match, score })));
     for (const team of teams) team.provenance = [{ sourceName: SOURCE_POLICY.matchArchive, sourceUrl: url, retrievedAt, origin: 'official', confidence: 'high' }];
     matches.push(...normalized);
-    teamParticipations.push(...teams);
-  }
 
-  if (matches.length < 1000) throw new Error(`Historical archive coverage looks incomplete: only ${matches.length} matches were imported.`);
-  if (new Set(matches.map(match => match.tournamentId)).size !== YEARS.length) throw new Error('At least one played World Cup edition is missing from the archive.');
-
-  for (const year of YEARS) {
     const editionPayload = {
       schemaVersion: 1,
       generatedAt: retrievedAt,
       sourcePolicy: SOURCE_POLICY,
       notHeld: [],
       tournaments: tournaments.filter(tournament => tournament.year === year),
-      teamParticipations: teamParticipations.filter(team => team.tournamentId === `wc-${year}`),
-      matches: matches.filter(match => match.tournamentId === `wc-${year}`),
+      teamParticipations: teams,
+      matches: normalized,
+      cancelledFixtures,
     };
     await fs.writeFile(path.join(OUT_DIR, `${year}.json`), `${JSON.stringify(editionPayload)}\n`);
   }
+
+  if (matches.length < 1000) throw new Error(`Historical archive coverage looks incomplete: only ${matches.length} played matches were imported.`);
+  if (new Set(matches.map(match => match.tournamentId)).size !== YEARS.length) throw new Error('At least one played World Cup edition is missing from the archive.');
 
   const manifest = {
     schemaVersion: 1,
@@ -149,10 +164,11 @@ async function main() {
     sourcePolicy: SOURCE_POLICY,
     notHeld: NOT_HELD.map(year => ({ year, id: `wc-${year}`, status: 'not-held' })),
     editions: tournaments.map(tournament => ({ ...tournament, file: `${tournament.year}.json` })),
+    canceledFixtureCount: editions.reduce((count, edition) => count + edition.payload.matches.filter(isCancelledFixture).length, 0),
   };
 
   await fs.writeFile(MANIFEST_OUT, `${JSON.stringify(manifest)}\n`);
-  console.log(`Saved ${matches.length} historical matches across ${YEARS.length} played World Cups to ${path.relative(ROOT, OUT_DIR)} (one static file per edition).`);
+  console.log(`Saved ${matches.length} played historical matches across ${YEARS.length} World Cups; retained ${manifest.canceledFixtureCount} canceled source fixtures separately.`);
 }
 
 function summarizeTeams(year, matches) {

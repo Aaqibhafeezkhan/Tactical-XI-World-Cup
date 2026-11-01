@@ -119,6 +119,18 @@ export interface HistoricalMatch {
   provenance: Provenance[];
 }
 
+export interface HistoricalCancelledFixture {
+  id: string;
+  tournamentId: string;
+  stage: CompetitionStage;
+  date?: string;
+  venue?: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  status: 'cancelled';
+  provenance: Provenance[];
+}
+
 export interface HistoricalWorldCupData {
   tournaments: HistoricalTournament[];
   teamParticipations: TeamParticipation[];

@@ -24,6 +24,7 @@ export default function HistoricalMatchExplorer({ archive, tournamentId, onBackT
     return participation.get(m.homeTeamParticipationId)?.teamName.toLowerCase().includes(q)||participation.get(m.awayTeamParticipationId)?.teamName.toLowerCase().includes(q);
   }), [archive,tournamentId,stage,query,participation]);
   const stages = useMemo(() => [...new Set(archive.matches.filter(m=>m.tournamentId===tournamentId).map(m=>m.stage))], [archive,tournamentId]);
+  const cancelledFixtures = (archive.cancelledFixtures ?? []).filter(fixture => fixture.tournamentId === tournamentId);
   const label=(p:TeamParticipation|undefined)=>p?.teamName ?? 'Unknown team';
   const score=(m:HistoricalMatch)=>m.homeScore==null||m.awayScore==null?'Result unavailable':`${m.homeScore} — ${m.awayScore}${m.homeScoreAfterPenalties!=null||m.awayScoreAfterPenalties!=null?' pens':''}`;
   return <div style={{minHeight:'100vh',background:'#07120f',color:'#eef8f3',fontFamily:'Inter,ui-sans-serif,system-ui,sans-serif'}}>
@@ -34,16 +35,25 @@ export default function HistoricalMatchExplorer({ archive, tournamentId, onBackT
     <main ref={mainRef} className="historical-main" style={{maxWidth:1180,margin:'0 auto',padding:28}} tabIndex={-1} aria-labelledby="historical-match-title">
       <div style={{marginBottom:20}}><div style={{fontSize:9,letterSpacing:'.18em',color:'#7f968a',fontWeight:800}}>RECORDED FIXTURES</div><h1 id="historical-match-title" style={{fontSize:30,margin:'6px 0'}}>World Cup {archive.tournaments.find(t=>t.year===Number(tournamentId.replace('wc-','')))?.year ?? ''} matches</h1><p style={{fontSize:11,color:'#8ea69b',lineHeight:1.6,margin:0}}>Archived competition records only. Scores and match context below are not simulation outputs.</p></div>
       <div className="historical-controls" style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
-        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search teams" style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9,width:220}} />
-        <select value={stage} onChange={e=>setStage(e.target.value)} style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9}}><option value="all">All stages</option>{stages.map(s=><option key={s} value={s}>{stageLabels[s]??s}</option>)}</select>
+        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search teams" aria-label="Search recorded matches by team" style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9,width:220}} />
+        <select value={stage} onChange={e=>setStage(e.target.value)} aria-label="Filter recorded matches by stage" style={{background:'#0b1713',border:'1px solid #264136',color:'#eef8f3',padding:'10px 12px',borderRadius:9}}><option value="all">All stages</option>{stages.map(s=><option key={s} value={s}>{stageLabels[s]??s}</option>)}</select>
       </div>
-      <section className="historical-match-list" style={{display:'grid',gap:8}}>{matches.map(m=>{const home=participation.get(m.homeTeamParticipationId),away=participation.get(m.awayTeamParticipationId);return <article className="historical-match-card" key={m.id} style={{padding:15,border:'1px solid rgba(255,255,255,.07)',borderRadius:12,background:'#0a1713',display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:12,alignItems:'center'}}>
+      <section className="historical-match-list" aria-label="Played historical matches" style={{display:'grid',gap:8}}>{matches.map(m=>{const home=participation.get(m.homeTeamParticipationId),away=participation.get(m.awayTeamParticipationId);return <article className="historical-match-card" key={m.id} style={{padding:15,border:'1px solid rgba(255,255,255,.07)',borderRadius:12,background:'#0a1713',display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:12,alignItems:'center'}}>
         <div className="historical-match-home"><strong>{label(home)}</strong><div style={{fontSize:9,color:'#71877d',marginTop:5}}>{home?.confederation ?? 'Confederation unavailable'}</div></div>
         <div className="historical-match-score" style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:900}}>{score(m)}</div><div style={{fontSize:9,color:'#9cefc0',marginTop:4}}>{stageLabels[m.stage]??m.stage}</div></div>
         <div className="historical-match-away" style={{textAlign:'right'}}><strong>{label(away)}</strong><div style={{fontSize:9,color:'#71877d',marginTop:5}}>{away?.confederation ?? 'Confederation unavailable'}</div></div>
         <div style={{gridColumn:'1 / -1',borderTop:'1px solid rgba(255,255,255,.05)',paddingTop:9,fontSize:9,color:'#7f968a'}}>{m.date ?? 'Date unavailable'} · {m.venue ?? 'Venue unavailable'}{m.hostCity ? ` · ${m.hostCity}` : ''}</div>
       </article>})}</section>
       {matches.length===0 && <div role="status" style={{padding:30,textAlign:'center',color:'#71877d',border:'1px solid rgba(255,255,255,.06)',borderRadius:12}}>No recorded fixtures match these filters.</div>}
+      {cancelledFixtures.length > 0 && <section aria-labelledby="cancelled-fixtures-title" style={{marginTop:22}}>
+        <div style={{fontSize:9,letterSpacing:'.16em',color:'#c6a86d',fontWeight:800}}>SOURCE RECORDS · NOT PLAYED</div>
+        <h2 id="cancelled-fixtures-title" style={{fontSize:17,margin:'6px 0 10px'}}>Cancelled fixtures ({cancelledFixtures.length})</h2>
+        <div style={{display:'grid',gap:8}}>{cancelledFixtures.map(fixture=><article key={fixture.id} style={{padding:13,border:'1px solid rgba(198,168,109,.18)',borderRadius:10,background:'rgba(198,168,109,.04)'}}>
+          <strong>{fixture.homeTeamName} vs {fixture.awayTeamName}</strong>
+          <div style={{fontSize:9,color:'#c6a86d',marginTop:5}}>Cancelled · {stageLabels[fixture.stage]??fixture.stage} · {fixture.date ?? 'Date unavailable'} · {fixture.venue ?? 'Venue unavailable'}</div>
+          <p style={{fontSize:10,color:'#8ea69b',lineHeight:1.55,margin:'7px 0 0'}}>The source marks this fixture as cancelled. It is not included in played-match results or team statistics, and no score is inferred.</p>
+        </article>)}</div>
+      </section>}
       <p style={{fontSize:9,color:'#526a60',lineHeight:1.6,marginTop:14}}>This view uses the historical archive's provenance-backed match records. It does not infer lineups, tactics, player ratings, or simulated events.</p>
     </main>
   </div>;
