@@ -1,4 +1,4 @@
-import type { HistoricalMatch, TeamParticipation } from './types';
+import type { HistoricalCancelledFixture, HistoricalMatch, TeamParticipation } from './types';
 
 export interface HistoricalArchiveEdition {
   year: number;
@@ -19,6 +19,7 @@ export interface HistoricalArchiveManifest {
   };
   notHeld: Array<{ year: number; id: string; status: 'not-held' }>;
   editions: Array<HistoricalArchiveEdition & { file: string }>;
+  canceledFixtureCount?: number;
 }
 
 export interface HistoricalArchiveDocument {
@@ -34,6 +35,7 @@ export interface HistoricalArchiveDocument {
   tournaments: HistoricalArchiveEdition[];
   teamParticipations: TeamParticipation[];
   matches: HistoricalMatch[];
+  cancelledFixtures?: HistoricalCancelledFixture[];
 }
 
 export const HISTORICAL_ARCHIVE_MANIFEST_PATH = '/data/historicalWorldCup/index.json';

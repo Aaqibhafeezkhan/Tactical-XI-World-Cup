@@ -45,7 +45,7 @@ The project keeps three layers separate:
 2. **Reconstructed tactical metadata** — tactical information that may require historical reconstruction and should not be presented as exact when evidence is incomplete.
 3. **Model-generated analysis** — hypothetical simulations and app-generated ratings.
 
-Historical player/squad data is tournament-specific. When historical evidence is unavailable, the application should show that limitation rather than silently substitute players from the modern 2026 registry.
+Historical player/squad data is tournament-specific. When historical evidence is unavailable, the application should show that limitation rather than silently substitute players from the modern 2026 registry. Source fixtures explicitly marked canceled are retained separately from played matches; they are never assigned an invented score or included in team statistics.
 
 ## Data provenance
 
@@ -82,7 +82,7 @@ The app intentionally has no backend, database, authentication, live match feeds
 
 ## Local development
 
-Requirements: Node.js 20+.
+Requirements: Node.js 22+.
 
 ```bash
 npm install
@@ -141,6 +141,7 @@ A release verification should use a clean checkout and execute, in order:
 6. Verify 1942 and 1946 display as not held without requesting match data.
 7. Verify the 2026 Tactical XI flow still loads the 2026 registry and can run a hypothetical simulation.
 8. Verify historical match records remain visually distinct from simulated results.
+9. For 1938, verify the canceled Sweden–Austria source fixture appears separately and does not contribute a score or team statistics.
 
 ## GitHub Pages
 
@@ -155,6 +156,7 @@ Enable **Settings → Pages → Source → GitHub Actions** for a repository Pag
 - Historical squad/player evidence is less complete than the tournament and match archive.
 - Reconstructed historical tactical roles are not official records unless directly sourced.
 - Venue, date and other match fields can be unavailable in the source archive.
+- Canceled source fixtures are shown separately and excluded from played-match totals.
 - The historical archive is not an official FIFA ratings or prediction dataset.
 - Simulated scores, xG, events and player ratings are hypothetical outputs from the application's rules-based model.
 
